@@ -111,7 +111,7 @@ void loop() {
             client.print(ldrvalue);
             client.println("<br />");
 
-            client.print("Humidity :");
+            client.print("Humidity(%) :");
             client.print(Humidity);
             client.print("   Temperature(*C):");
             client.print(TempC);
