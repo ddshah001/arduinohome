@@ -44,12 +44,17 @@ int maximumRange = 200; // Maximum range needed
 int minimumRange = 0; // Minimum range needed
 long duration, distance; // Duration used to calculate distance
 int tanklevel = 100;
+bool tanksensor;
 
 int ldrpin = A0;
 int ldrvalue;
-bool lightflag;
+bool light_m;
 
 float TempC,TempF,Humidity,hif,hic; //hif: Heat Index in Fahrenheit, hic: Heat Index in Celsius
+bool dhtsensor;
+
+int rel = 3;
+String readString;
 
 void setup() {
   // Open serial communications and wait for port to open:
@@ -65,6 +70,14 @@ void setup() {
   Serial.print("server is at ");
   Serial.println(Ethernet.localIP());
    dht.begin();
+   pinMode(trigPin, OUTPUT);
+   pinMode(echoPin, INPUT);
+   pinMode(LEDPin, OUTPUT);
+    pinMode(rel, OUTPUT);
+    digitalWrite(rel, HIGH);
+    tanksensor = false;
+    dhtsensor = false;
+    light_m = false;
 }
 
 
@@ -80,20 +93,26 @@ void loop() {
       if (client.available()) {
         char c = client.read();
         Serial.write(c);
-        //Call Sensor Functions 
-         dist();
-         ldr();
-         dhtread();
+        if (readString.length() < 100) {
+          //store characters to string
+          readString += c;
+          //Serial.print(c);
+         }
+        
         // if you've gotten to the end of the line (received a newline
         // character) and the line is blank, the http request has ended,
         // so you can send a reply
        
-        if (c == '\n' && currentLineIsBlank) {
+        if (c == '\n') {
+          //Call Sensor Functions 
+         dist();
+         ldr();
+         dhtread();
           // send a standard http response header
           client.println("HTTP/1.1 200 OK");
           client.println("Content-Type: text/html");
           client.println("Connection: close");  // the connection will be closed after completion of the response
-          client.println("Refresh: 30");  // refresh the page automatically every 5 sec
+          client.println("Refresh: 10");  // refresh the page automatically every 5 sec
           client.println();
           client.println("<!DOCTYPE HTML>");
           client.println("<html>");
@@ -101,16 +120,35 @@ void loop() {
           // output the value of each analog input pin
           
             //int sensorReading = 10;
-            client.print("Tank Level:");
+            if(tanksensor==false)
+            {
+              client.print("Check Connection of Tank Sensor");
+              client.println("<br />");
+            }
+            else
+            {
+            client.print("Tank Level(%):");
             client.print(tanklevel);
-            client.print(" Dist To Water:");
+            client.print("  Dist To Water:");
             client.print(distance);
             client.println("<br />");
-            
-          client.print("LDR Reading :");
-            client.print(ldrvalue);
+            }
+         // client.print("LDR Reading :");
+          //  client.print(ldrvalue);
             client.println("<br />");
-
+            if(ldrvalue>950 && light_m==true)
+            {
+              client.print("Turn OFF any One light both are ON");
+              client.println("<br />");
+            }
+            
+            if(dhtsensor==false)
+            {
+               client.print("Check Connection of Temperature(DHT11) Sensor");
+               client.println("<br />");
+            }
+            else
+            {
             client.print("Humidity(%) :");
             client.print(Humidity);
             client.print("   Temperature(*C):");
@@ -122,6 +160,16 @@ void loop() {
             client.print("   Heat Index(*F):");
             client.print(hif);
             client.println("<br />");
+            }
+            if(light_m==false)
+            {
+            client.println("<a href=\"/?button1on\"\">Turn On LED</a>");
+            }
+            else
+            {
+            client.println("<a href=\"/?button1off\"\">Turn Off LED</a><br />");
+            }   
+            client.println("<br />");     
           
           client.println("</html>");
           break;
@@ -140,6 +188,18 @@ void loop() {
     // close the connection:
     client.stop();
     Serial.println("client disconnected");
+    if (readString.indexOf("?button1on") >0){
+               digitalWrite(rel, LOW);
+               light_m = true;
+           }
+           if (readString.indexOf("?button1off") >0){
+               digitalWrite(rel, HIGH);
+               light_m = false;
+           }
+           
+          
+            //clearing string for next read
+            readString=""; 
   }
 }
 
@@ -163,11 +223,13 @@ void dist()
  /* Send a negative number to computer and Turn LED ON 
  to indicate "out of range" */
  Serial.println("Sensor Data Not Valid (Check Sensor Connation)");
+ tanksensor = false;
   
  }
  else {
  /* Send the distance to the computer using Serial protocol, and
  turn LED OFF to indicate successful reading. */
+ tanksensor = true;
  Serial.println("Water Distance from Sensor:  ");
  Serial.println(distance);
  tanklevel = 120-distance;
@@ -191,8 +253,13 @@ void dhtread()
 
   // Check if any reads failed and exit early (to try again).
   if (isnan(Humidity) || isnan(TempC) || isnan(TempF)) {
+    dhtsensor = false;
     Serial.println("Failed to read from DHT sensor!");
-    return;
+    
+  }
+  else
+  {
+    dhtsensor = true;
   }
 
   // Compute heat index in Fahrenheit (the default)
